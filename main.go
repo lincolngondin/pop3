@@ -1,3 +1,15 @@
+/**
+POP3 client
+
+example:
+conn, err := pop3.NewConn("pop.gmail.com:995")
+if err != nil {
+    log.Fatal(err)
+}
+response := conn.List()
+conn.Close()
+
+*/
 package main
 
 import (
