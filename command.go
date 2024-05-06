@@ -1,4 +1,4 @@
-package main
+package pop3
 
 import (
 	"strings"

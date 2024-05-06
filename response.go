@@ -1,5 +1,5 @@
-package main
+package pop3
 
-type Response struct {
-    info [][]byte
+type response struct {
+    Info [][]byte
 }

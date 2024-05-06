@@ -1,9 +1,8 @@
-package main
+package pop3
 
 import (
 	"bufio"
 	"crypto/tls"
-	"log"
 )
 
 
@@ -14,21 +13,20 @@ type Conn struct {
 }
 
 // Start the TCP connection with the server, the server will send an greeting in success
-func (conn *Conn) Start() (*Response, error) {
+func (conn *Conn) Start() (*response, error) {
 	connection, err := tls.Dial("tcp", conn.addr, conn.tlsConfig)
 	if err != nil {
 		return nil, err
 	}
     conn.conn = connection
-    response, responseErr := conn.readResponse(false)
+    response, responseErr := conn.readresponse()
     if responseErr != nil {
         return nil, responseErr
     }
 	return response, nil
 }
 
-func splitResponseLines(data []byte, atEOF bool) (int, []byte, error) {
-    log.Print(atEOF, data, string(data))
+func splitresponseLines(data []byte, atEOF bool) (int, []byte, error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -45,17 +43,17 @@ func splitResponseLines(data []byte, atEOF bool) (int, []byte, error) {
     
 }
 
-func (conn *Conn) readResponse(multiline bool) (*Response, error) {
-    response := &Response{
-        info: make([][]byte, 0, 10),
+func (conn *Conn) readresponse() (*response, error) {
+    response := &response{
+        Info: make([][]byte, 0, 10),
     }
     scanner := bufio.NewScanner(conn.conn)
-    scanner.Split(splitResponseLines)
+    scanner.Split(splitresponseLines)
     for scanner.Scan() == true {
         data := scanner.Bytes()
         respLine := make([]byte, len(data))
         copy(respLine, data)
-        response.info = append(response.info, respLine)
+        response.Info = append(response.Info, respLine)
     }
 
     return response, nil
@@ -66,27 +64,36 @@ func (conn *Conn) sendCommand(cmd cmd) error {
     return err
 }
 
-func (conn *Conn) User(name string) (*Response, error){
+func (conn *Conn) User(name string) (*response, error){
     conn.sendCommand(NewCMD(commandUser, name))
-    response, err := conn.readResponse(false)
+    response, err := conn.readresponse()
     if err != nil {
         return nil, err
     }
     return response, nil
 }
 
-func (conn *Conn) Pass(password string) (*Response, error){
+func (conn *Conn) Pass(password string) (*response, error){
     conn.sendCommand(NewCMD(commandPass, password))
-    resp, err := conn.readResponse(false)
+    resp, err := conn.readresponse()
     if err != nil {
         return nil, err
     }
     return resp, nil
 }
 
-func (conn *Conn) Quit() (*Response, error) {
+func (conn *Conn) Apop(name, digest string) (*response, error){
+    conn.sendCommand(NewCMD(commandPass, name, digest))
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+func (conn *Conn) Quit() (*response, error) {
     conn.sendCommand(NewCMD(commandQuit))
-    response, responseErr := conn.readResponse(false)
+    response, responseErr := conn.readresponse()
     if responseErr != nil {
         return nil, responseErr
     }
@@ -94,35 +101,92 @@ func (conn *Conn) Quit() (*Response, error) {
 }
 
 // The server returns na positive response with an line containing information for the maildrop
-func (conn *Conn) Stat() (*Response, error) {
+func (conn *Conn) Stat() (*response, error) {
     conn.sendCommand(NewCMD(commandStat))
-    response, err := conn.readResponse(false)
+    response, err := conn.readresponse()
     if err != nil {
         return nil, err
     }
     return response, nil
 }
 
-/* 
-If argument is given the server returns an line containing info of the message
-If no argument the response is multiline giving info of each message
-*/
-func (conn *Conn) List(msg string) (*Response, error) {
+ 
+// If argument is given the server returns an line containing info of the message
+// If no argument the response is multiline giving info of each message
+func (conn *Conn) List(msg string) (*response, error) {
     if msg != "" {
         conn.sendCommand(NewCMD(commandList, msg))
     } else {
         conn.sendCommand(NewCMD(commandList))
     }
-    response, err := conn.readResponse(msg != "")
+    response, err := conn.readresponse()
     if err != nil {
         return nil, err
     }
     return response, nil
 }
 
-func (conn *Conn) Retr(msg string) (*Response, error) {
+// The pop3 server replies with message correspoding to the given msg number, or -ERR if no such message
+func (conn *Conn) Retr(msg string) (*response, error) {
     conn.sendCommand(NewCMD(commandRetr, msg))
-    resp, err := conn.readResponse(true)
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+// The pop3 server replies with an positive response
+func (conn *Conn) Noop() (*response, error) {
+    conn.sendCommand(NewCMD(commandNoop))
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+// The pop3 server marks the msg as deleted
+func (conn *Conn) Dele(msg string) (*response, error) {
+    conn.sendCommand(NewCMD(commandDele, msg))
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+
+// The pop3 server unmark all message marked as deleted
+func (conn *Conn) Rset() (*response, error) {
+    conn.sendCommand(NewCMD(commandRset))
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+// The pop3 server send the headers of the message msg the line separating from the body and the 
+// number of lines n of the body of the indicated message
+func (conn *Conn) Top(msg, n string) (*response, error) {
+    conn.sendCommand(NewCMD(commandTop, msg, n))
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+}
+
+// if argument was given the server issue an line containing info about that message
+// if no argument, issue an multiline response containing info of each message in maildrop
+func (conn *Conn) Uidl(msg string) (*response, error) {
+    if msg != "" {
+        conn.sendCommand(NewCMD(commandTop, msg))
+    } else {
+        conn.sendCommand(NewCMD(commandTop))
+    }
+    resp, err := conn.readresponse()
     if err != nil {
         return nil, err
     }
@@ -135,6 +199,16 @@ func (conn *Conn) Close() error {
     return conn.conn.Close()
 }
 
+// Execute arbitrary command
+func (conn *Conn) Exec(cmd cmd) (*response, error) {
+    conn.sendCommand(cmd)
+    resp, err := conn.readresponse()
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
+
+}
 
 func NewConn(addr string, config *tls.Config) *Conn {
 	return &Conn{
