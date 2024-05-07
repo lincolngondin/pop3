@@ -1,4 +1,4 @@
-// Package pop3 implments an Post Ofice Protocol Version 3 (POP3) client as defined in RFC 1939.
+// Package pop3 implements an Post Ofice Protocol Version 3 (POP3) client as defined in RFC 1939.
 // The package returns all server response as raw bytes, you must parse yourself in the way you like
 package pop3
 
