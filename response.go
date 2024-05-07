@@ -1,5 +1,6 @@
 package pop3
 
 type response struct {
-    Info [][]byte
+    // Data field is the raw bytes response from the server.
+    Data [][]byte
 }

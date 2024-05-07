@@ -1,3 +1,5 @@
+// Package pop3 implments an Post Ofice Protocol Version 3 (POP3) client as defined in RFC 1939.
+// The package returns all server response as raw bytes, you must parse yourself in the way you like
 package pop3
 
 import (
@@ -5,14 +7,13 @@ import (
 	"crypto/tls"
 )
 
-
 type Conn struct {
 	addr      string
 	conn      *tls.Conn
 	tlsConfig *tls.Config
 }
 
-// Start the TCP connection with the server, the server will send an greeting in success
+// Start the TCP connection with the server, the server will send an greeting in success.
 func (conn *Conn) Start() (*response, error) {
 	connection, err := tls.Dial("tcp", conn.addr, conn.tlsConfig)
 	if err != nil {
@@ -24,6 +25,22 @@ func (conn *Conn) Start() (*response, error) {
         return nil, responseErr
     }
 	return response, nil
+}
+
+// End the session with the POP3 server, this doesn't close the TCP connection, you must call Close() for that.
+func (conn *Conn) Quit() (*response, error) {
+    conn.sendCommand(NewCMD(commandQuit))
+    response, responseErr := conn.readresponse()
+    if responseErr != nil {
+        return nil, responseErr
+    }
+    return response, nil
+}
+
+// Close the TCP connection with the server, remember that you MUST send an quit command calling conn.Quit()
+// before to close the session.
+func (conn *Conn) Close() error {
+    return conn.conn.Close()
 }
 
 func splitresponseLines(data []byte, atEOF bool) (int, []byte, error) {
@@ -45,7 +62,7 @@ func splitresponseLines(data []byte, atEOF bool) (int, []byte, error) {
 
 func (conn *Conn) readresponse() (*response, error) {
     response := &response{
-        Info: make([][]byte, 0, 10),
+        Data: make([][]byte, 0, 10),
     }
     scanner := bufio.NewScanner(conn.conn)
     scanner.Split(splitresponseLines)
@@ -53,17 +70,18 @@ func (conn *Conn) readresponse() (*response, error) {
         data := scanner.Bytes()
         respLine := make([]byte, len(data))
         copy(respLine, data)
-        response.Info = append(response.Info, respLine)
+        response.Data = append(response.Data, respLine)
     }
 
     return response, nil
 }
 
-func (conn *Conn) sendCommand(cmd cmd) error {
+func (conn *Conn) sendCommand(cmd command) error {
     _, err := conn.conn.Write([]byte(cmd.GetCMD()))
     return err
 }
 
+// User command, name is an string identifying a mailbox.
 func (conn *Conn) User(name string) (*response, error){
     conn.sendCommand(NewCMD(commandUser, name))
     response, err := conn.readresponse()
@@ -73,6 +91,7 @@ func (conn *Conn) User(name string) (*response, error){
     return response, nil
 }
 
+// Pass command
 func (conn *Conn) Pass(password string) (*response, error){
     conn.sendCommand(NewCMD(commandPass, password))
     resp, err := conn.readresponse()
@@ -82,6 +101,7 @@ func (conn *Conn) Pass(password string) (*response, error){
     return resp, nil
 }
 
+// APOP command, name is an string identifying a mailbox and a MD5 digest string
 func (conn *Conn) Apop(name, digest string) (*response, error){
     conn.sendCommand(NewCMD(commandPass, name, digest))
     resp, err := conn.readresponse()
@@ -91,16 +111,7 @@ func (conn *Conn) Apop(name, digest string) (*response, error){
     return resp, nil
 }
 
-func (conn *Conn) Quit() (*response, error) {
-    conn.sendCommand(NewCMD(commandQuit))
-    response, responseErr := conn.readresponse()
-    if responseErr != nil {
-        return nil, responseErr
-    }
-    return response, nil
-}
-
-// The server returns na positive response with an line containing information for the maildrop
+// The server returns na positive response with an line containing information for the maildrop.
 func (conn *Conn) Stat() (*response, error) {
     conn.sendCommand(NewCMD(commandStat))
     response, err := conn.readresponse()
@@ -193,14 +204,8 @@ func (conn *Conn) Uidl(msg string) (*response, error) {
     return resp, nil
 }
 
-// Close the TCP connection with the server, remember that you MUST send an quit command calling conn.Quit()
-// before to close the session.
-func (conn *Conn) Close() error {
-    return conn.conn.Close()
-}
-
 // Execute arbitrary command
-func (conn *Conn) Exec(cmd cmd) (*response, error) {
+func (conn *Conn) Exec(cmd command) (*response, error) {
     conn.sendCommand(cmd)
     resp, err := conn.readresponse()
     if err != nil {
@@ -210,6 +215,7 @@ func (conn *Conn) Exec(cmd cmd) (*response, error) {
 
 }
 
+// Create new connection object, you must call Start() to init the connection
 func NewConn(addr string, config *tls.Config) *Conn {
 	return &Conn{
 		addr:   addr,

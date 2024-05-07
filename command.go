@@ -24,24 +24,28 @@ const (
 	commandUser = "USER"
 )
 
-type cmd interface {
+type command interface {
 	// return the command with the arguments and the CRLF in the end
 	GetCMD() string
 }
 
-type CMD struct {
+type cmd struct {
 	keyword   string
 	arguments []string
 }
 
-func NewCMD(keyw string, args ...string) cmd {
-	return &CMD{
+// Create an arbitrary command with keyword key and arguments args.
+// Depends of the server if the implementation of your command will be supported.
+func NewCMD(keyw string, args ...string) *cmd {
+	return &cmd{
 		keyword:   keyw,
 		arguments: args,
 	}
 }
 
-func (cmd *CMD) GetCMD() string {
+// Return the command in the way that must be send for the server
+// in the format defined in RFC 1939 section 3
+func (cmd *cmd) GetCMD() string {
 	strBuilder := &strings.Builder{}
 	strBuilder.WriteString(cmd.keyword)
 	for _, arg := range cmd.arguments {
@@ -49,9 +53,4 @@ func (cmd *CMD) GetCMD() string {
 	}
 	strBuilder.WriteString(crlf)
 	return strBuilder.String()
-}
-
-var quitCMD CMD = CMD{
-	keyword:   commandQuit,
-	arguments: nil,
 }
